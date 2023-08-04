@@ -242,6 +242,11 @@ impl<C: AsClient> EntityTypeStore for PostgresStore<C> {
                     )
                 })
                 .attach_lazy(|| schema.clone())?;
+            tracing::warn!(
+                "closed schema for {}: {:?}",
+                schema.id().clone(),
+                transaction.create_closed_entity_type_schema(schema).await?
+            );
         }
 
         transaction.commit().await.change_context(InsertionError)?;

@@ -213,6 +213,27 @@ Accept: application/json
     });
 %}
 
+### Insert Occupation property type
+POST http://127.0.0.1:4000/property-types
+Content-Type: application/json
+Accept: application/json
+
+{
+  "ownedById": "{{account_id}}",
+  "actorId": "{{account_id}}",
+  "schema": {
+    "$schema": "https://blockprotocol.org/types/modules/graph/0.3/schema/property-type",
+    "kind": "propertyType",
+    "$id": "http://localhost:3000/@alice/types/property-type/occupation/v/1",
+    "title": "Occupation",
+    "oneOf": [
+      {
+        "$ref": "http://localhost:3000/@alice/types/data-type/text/v/1"
+      }
+    ]
+  }
+}
+
 ### Insert Name property type
 POST http://127.0.0.1:4000/property-types
 Content-Type: application/json
@@ -526,6 +547,32 @@ Accept: application/json
     });
     client.global.set("person_entity_type_id", `${response.body.recordId.baseUrl}v/${response.body.recordId.version}`);
 %}
+
+### Insert Employee entity type
+POST http://127.0.0.1:4000/entity-types
+Content-Type: application/json
+Accept: application/json
+
+{
+  "ownedById": "{{account_id}}",
+  "actorId": "{{account_id}}",
+  "schema": {
+    "$schema": "https://blockprotocol.org/types/modules/graph/0.3/schema/entity-type",
+    "kind": "entityType",
+    "$id": "http://localhost:3000/@alice/types/entity-type/employee4/v/1",
+    "type": "object",
+    "title": "Employee",
+    "allOf": [
+      { "$ref": "http://localhost:3000/@alice/types/entity-type/person/v/1" }
+    ],
+    "properties": {
+      "http://localhost:3000/@alice/types/property-type/occupation/": {
+        "$ref": "http://localhost:3000/@alice/types/property-type/occupation/v/1"
+      }
+    },
+    "required": ["http://localhost:3000/@alice/types/property-type/occupation/"]
+  }
+}
 
 ### Get Person entity type
 POST http://127.0.0.1:4000/entity-types/query

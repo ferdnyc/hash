@@ -6,8 +6,11 @@ mod pool;
 mod query;
 mod traversal_context;
 
+use std::collections::HashSet;
+
 use async_trait::async_trait;
 use error_stack::{IntoReport, Report, Result, ResultExt};
+use postgres_types::Json;
 use time::OffsetDateTime;
 #[cfg(hash_graph_test_environment)]
 use tokio_postgres::{binary_copy::BinaryCopyInWriter, types::Type};
@@ -497,6 +500,60 @@ where
         }
 
         Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip(self, entity_type))]
+    async fn create_closed_entity_type_schema(
+        &self,
+        mut entity_type: EntityType,
+    ) -> Result<repr::EntityType, InsertionError> {
+        let mut used_ids = HashSet::from([entity_type.id().clone()]);
+        let mut entity_type_repr = repr::EntityType::from(entity_type.clone());
+        loop {
+            for parent_ref in entity_type.inherits_from().all_of() {
+                if !used_ids.insert(parent_ref.url().clone()) {
+                    // TODO: Remove the parent id instead. inheriting from itself should do nothing.
+                    //   see https://linear.app/hash/issue/H-315
+                    return Err(Report::new(InsertionError)
+                        .attach_printable("Self-inheritance is currently not supported")
+                        .attach_printable(parent_ref.url().clone()));
+                }
+
+                let Json(parent_schema) = self
+                    .as_client()
+                    .query_one(
+                        r#"
+                            SELECT schema FROM entity_types
+                            WHERE ontology_id = (
+                                SELECT ontology_id FROM ontology_ids
+                                WHERE base_url = $1 AND version = $2
+                            );
+                        "#,
+                        &[
+                            &parent_ref.url().base_url.as_str(),
+                            &OntologyTypeVersion::new(parent_ref.url().version),
+                        ],
+                    )
+                    .await
+                    .into_report()
+                    .change_context(InsertionError)?
+                    .get(0);
+
+                entity_type_repr
+                    .merge_parent(parent_schema)
+                    .into_report()
+                    .change_context(InsertionError)?;
+            }
+
+            entity_type = EntityType::try_from(entity_type_repr.clone())
+                .into_report()
+                .change_context(InsertionError)?;
+            if entity_type.inherits_from().all_of().is_empty() {
+                break;
+            }
+        }
+
+        Ok(entity_type_repr)
     }
 
     #[tracing::instrument(level = "debug", skip(self, entity_type))]
